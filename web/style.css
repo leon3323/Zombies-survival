@@ -192,13 +192,13 @@ body {
     z-index: 102;
 }
 
-/* Virtual Joystick */
 .joystick-container {
     position: relative;
     width: 120px;
     height: 120px;
     margin-left: 10px;
     margin-bottom: 10px;
+    touch-action: none !important; /* Force immediate touch response */
 }
 
 .joystick-base {
