@@ -3,7 +3,7 @@
  * Enables offline gameplay and caching
  */
 
-const CACHE_NAME = 'zombie-survival-v1';
+const CACHE_NAME = 'zombie-survival-v2';
 const ASSETS_TO_CACHE = [
     '/',
     '/index.html',
