@@ -250,6 +250,7 @@ body {
     white-space: nowrap;
     text-overflow: ellipsis;
     overflow: hidden;
+    touch-action: none !important; /* Add this line */
 }
 
 .action-btn:active {
@@ -258,7 +259,6 @@ body {
     transform: scale(0.95);
 }
 
-/* Firing Zone */
 .firing-zone {
     position: fixed;
     top: 0;
@@ -267,6 +267,7 @@ body {
     height: calc(100% - 150px);
     pointer-events: auto;
     z-index: 103;
+    touch-action: none !important; /* Add this line */
 }
 
 /* Modals */
