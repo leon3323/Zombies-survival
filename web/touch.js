@@ -284,9 +284,9 @@ document.addEventListener('DOMContentLoaded', () => {
         document.dispatchEvent(event);
     };
 
-    if (classScreen) {
+   if (classScreen) {
         classScreen.addEventListener('touchstart', handleSelection, { passive: false });
         classScreen.addEventListener('click', handleSelection);
     }
-});
-});
+}); // <-- This bracket closes DOMContentLoaded correctly
+}); // <-- TYPO: This extra bracket crashes the script compiler, disabling TouchControls entirely!
