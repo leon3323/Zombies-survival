@@ -263,7 +263,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const uiOverlay = document.getElementById('ui-overlay');
 
     classCards.forEach(card => {
-        card.addEventListener('touchstart', (e) => {
+        card.addEventListener('touchstart', (e) => { ... })
             e.preventDefault();
             const selectedClass = card.getAttribute('data-class');
             
