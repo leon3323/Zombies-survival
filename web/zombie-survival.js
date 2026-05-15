@@ -1,9 +1,12 @@
 /**
- * Zombie Survival Game - Enhanced Gameplay
- * Includes zombie entities, player rendering, collisions, and wave progression
+ * Zombie Survival Game - Enhanced Gameplay with Audio, Particles, Weapons, Bosses, Power-ups, Animations
+ * Full-featured survival game with all gameplay systems
  */
 
-// Game entity classes
+// ============================================================================
+// UTILITY CLASSES
+// ============================================================================
+
 class Vector2 {
     constructor(x = 0, y = 0) {
         this.x = x;
@@ -39,6 +42,148 @@ class Vector2 {
     }
 }
 
+// ============================================================================
+// PARTICLE SYSTEM
+// ============================================================================
+
+class Particle {
+    constructor(x, y, type = 'blood') {
+        this.position = new Vector2(x, y);
+        this.velocity = new Vector2(
+            (Math.random() - 0.5) * 300,
+            (Math.random() - 0.5) * 300 - 100
+        );
+        this.type = type;
+        this.lifetime = type === 'blood' ? 1.0 : 0.5;
+        this.maxLifetime = this.lifetime;
+        this.size = type === 'blood' ? 4 : 6;
+    }
+    
+    update(deltaTime) {
+        this.position = this.position.add(this.velocity.multiply(deltaTime));
+        this.velocity = this.velocity.multiply(0.95); // Friction
+        this.lifetime -= deltaTime;
+    }
+    
+    draw(ctx, cameraX, cameraY) {
+        const screenX = this.position.x - cameraX;
+        const screenY = this.position.y - cameraY;
+        
+        const alpha = this.lifetime / this.maxLifetime;
+        
+        if (this.type === 'blood') {
+            ctx.fillStyle = `rgba(255, 0, 0, ${alpha * 0.6})`;
+        } else {
+            ctx.fillStyle = `rgba(255, 200, 0, ${alpha * 0.8})`;
+        }
+        
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, this.size, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
+// ============================================================================
+// WEAPON SYSTEM
+// ============================================================================
+
+class Weapon {
+    constructor(type = 'pistol') {
+        this.type = type;
+        this.ammo = 0;
+        this.maxAmmo = 0;
+        this.magazine = 0;
+        this.maxMagazine = 0;
+        this.lastFireTime = 0;
+        this.isReloading = false;
+        this.reloadTime = 0;
+        this.animationTime = 0;
+        
+        this.setType(type);
+    }
+    
+    setType(type) {
+        this.type = type;
+        
+        switch(type) {
+            case 'pistol':
+                this.damage = 10;
+                this.fireRate = 0.1;
+                this.maxMagazine = 30;
+                this.maxAmmo = 120;
+                this.reloadTime = 2;
+                break;
+            case 'rifle':
+                this.damage = 20;
+                this.fireRate = 0.15;
+                this.maxMagazine = 30;
+                this.maxAmmo = 90;
+                this.reloadTime = 2.5;
+                break;
+            case 'shotgun':
+                this.damage = 40;
+                this.fireRate = 0.5;
+                this.maxMagazine = 8;
+                this.maxAmmo = 32;
+                this.reloadTime = 3;
+                break;
+            case 'grenade':
+                this.damage = 100;
+                this.fireRate = 1.0;
+                this.maxMagazine = 5;
+                this.maxAmmo = 20;
+                this.reloadTime = 1;
+                break;
+        }
+        
+        this.magazine = this.maxMagazine;
+        this.ammo = this.maxAmmo - this.magazine;
+    }
+    
+    canFire() {
+        return this.magazine > 0 && this.lastFireTime <= 0 && !this.isReloading;
+    }
+    
+    fire() {
+        if (this.canFire()) {
+            this.magazine--;
+            this.lastFireTime = this.fireRate;
+            this.animationTime = 0.1;
+            return true;
+        }
+        return false;
+    }
+    
+    reload() {
+        if (this.ammo > 0 && this.magazine < this.maxMagazine && !this.isReloading) {
+            this.isReloading = true;
+            this.reloadTime = 2;
+            return true;
+        }
+        return false;
+    }
+    
+    update(deltaTime) {
+        this.lastFireTime -= deltaTime;
+        this.animationTime -= deltaTime;
+        
+        if (this.isReloading) {
+            this.reloadTime -= deltaTime;
+            if (this.reloadTime <= 0) {
+                const ammoNeeded = this.maxMagazine - this.magazine;
+                const ammoTransfer = Math.min(this.ammo, ammoNeeded);
+                this.magazine += ammoTransfer;
+                this.ammo -= ammoTransfer;
+                this.isReloading = false;
+            }
+        }
+    }
+}
+
+// ============================================================================
+// ENTITY CLASSES
+// ============================================================================
+
 class Player {
     constructor(x, y) {
         this.position = new Vector2(x, y);
@@ -49,10 +194,11 @@ class Player {
         this.health = 100;
         this.fireDirection = new Vector2(1, 0);
         this.isMoving = false;
+        this.weapon = new Weapon('pistol');
+        this.score = 0;
     }
     
     update(deltaTime, input) {
-        // Update position based on input
         if (input.x !== 0 || input.y !== 0) {
             const direction = new Vector2(input.x, input.y).normalize();
             this.velocity = direction.multiply(this.speed);
@@ -63,6 +209,7 @@ class Player {
         }
         
         this.position = this.position.add(this.velocity.multiply(deltaTime));
+        this.weapon.update(deltaTime);
     }
     
     draw(ctx, cameraX, cameraY) {
@@ -80,7 +227,7 @@ class Player {
         ctx.fillStyle = healthPercent > 0.5 ? '#00ff00' : '#ff4444';
         ctx.fillRect(screenX - 15, screenY - 25, 30 * healthPercent, 4);
         
-        // Draw direction indicator
+        // Draw direction indicator (weapon direction)
         const fireScreenX = screenX + this.fireDirection.x * 20;
         const fireScreenY = screenY + this.fireDirection.y * 20;
         ctx.strokeStyle = '#00ff00';
@@ -89,6 +236,13 @@ class Player {
         ctx.moveTo(screenX, screenY);
         ctx.lineTo(fireScreenX, fireScreenY);
         ctx.stroke();
+        
+        // Draw reload indicator
+        if (this.weapon.isReloading) {
+            ctx.fillStyle = '#ffff00';
+            ctx.font = '12px Arial';
+            ctx.fillText('RELOAD', screenX - 20, screenY - 35);
+        }
     }
     
     takeDamage(amount) {
@@ -101,32 +255,36 @@ class Player {
 }
 
 class Zombie {
-    constructor(x, y, isInfected = false) {
+    constructor(x, y, isInfected = false, isBoss = false) {
         this.position = new Vector2(x, y);
         this.velocity = new Vector2(0, 0);
-        this.radius = 12;
-        this.speed = 100;
-        this.maxHealth = 30;
-        this.health = 30;
+        this.radius = isBoss ? 20 : 12;
+        this.speed = isBoss ? 80 : 100;
+        this.maxHealth = isBoss ? 100 : 30;
+        this.health = this.maxHealth;
         this.isInfected = isInfected;
+        this.isBoss = isBoss;
         this.detectionRange = 300;
         this.attacking = false;
         this.attackCooldown = 0;
+        this.deathTime = 0;
+        this.isDying = false;
     }
     
     update(deltaTime, player, isNight) {
-        const distToPlayer = this.position.distance(player.position);
+        if (this.isDying) {
+            this.deathTime -= deltaTime;
+            return;
+        }
         
-        // Increase speed at night
+        const distToPlayer = this.position.distance(player.position);
         const speedMultiplier = isNight ? 1.2 : 1;
         
         if (distToPlayer < this.detectionRange) {
-            // Chase player
             const direction = player.position.subtract(this.position).normalize();
             this.velocity = direction.multiply(this.speed * speedMultiplier);
             this.attacking = distToPlayer < this.radius + player.radius + 20;
         } else {
-            // Patrol (random movement)
             if (Math.random() < 0.02) {
                 const angle = Math.random() * Math.PI * 2;
                 this.velocity = new Vector2(Math.cos(angle), Math.sin(angle))
@@ -137,7 +295,6 @@ class Zombie {
         
         this.position = this.position.add(this.velocity.multiply(deltaTime));
         
-        // Update attack cooldown
         if (this.attackCooldown > 0) {
             this.attackCooldown -= deltaTime;
         }
@@ -147,8 +304,18 @@ class Zombie {
         const screenX = this.position.x - cameraX;
         const screenY = this.position.y - cameraY;
         
+        if (this.isDying) {
+            // Death animation - fade out
+            const alpha = this.deathTime / 0.5;
+            ctx.globalAlpha = alpha;
+        }
+        
         // Draw zombie body
-        ctx.fillStyle = this.isInfected ? '#ff6600' : '#228b22';
+        if (this.isBoss) {
+            ctx.fillStyle = '#ff0000';
+        } else {
+            ctx.fillStyle = this.isInfected ? '#ff6600' : '#228b22';
+        }
         ctx.beginPath();
         ctx.arc(screenX, screenY, this.radius, 0, Math.PI * 2);
         ctx.fill();
@@ -156,7 +323,7 @@ class Zombie {
         // Draw health indicator
         const healthPercent = this.health / this.maxHealth;
         ctx.fillStyle = '#ff4444';
-        ctx.fillRect(screenX - 12, screenY - 20, 24 * healthPercent, 3);
+        ctx.fillRect(screenX - this.radius, screenY - this.radius - 8, this.radius * 2 * healthPercent, 3);
         
         // Draw infected marker
         if (this.isInfected) {
@@ -166,11 +333,30 @@ class Zombie {
             ctx.arc(screenX, screenY, this.radius + 3, 0, Math.PI * 2);
             ctx.stroke();
         }
+        
+        // Draw boss marker
+        if (this.isBoss) {
+            ctx.strokeStyle = '#ffff00';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(screenX, screenY, this.radius + 5, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.fillStyle = '#ffff00';
+            ctx.font = 'bold 10px Arial';
+            ctx.fillText('BOSS', screenX - 15, screenY - this.radius - 15);
+        }
+        
+        ctx.globalAlpha = 1;
     }
     
     takeDamage(amount) {
         this.health = Math.max(0, this.health - amount);
-        return this.health <= 0;
+        if (this.health <= 0) {
+            this.isDying = true;
+            this.deathTime = 0.5;
+            return true;
+        }
+        return false;
     }
     
     canAttack() {
@@ -178,11 +364,55 @@ class Zombie {
     }
 }
 
+class Projectile {
+    constructor(x, y, dirX, dirY, damage, type = 'bullet', spread = 1) {
+        this.position = new Vector2(x, y);
+        this.direction = new Vector2(dirX, dirY).normalize();
+        
+        // Add spread for shotgun
+        if (spread > 1) {
+            const angle = Math.random() * Math.PI * 2;
+            const spreadAmount = (Math.random() - 0.5) * 0.3;
+            this.direction.x += Math.cos(angle) * spreadAmount;
+            this.direction.y += Math.sin(angle) * spreadAmount;
+            this.direction = this.direction.normalize();
+        }
+        
+        this.speed = type === 'grenade' ? 300 : 400;
+        this.damage = damage;
+        this.radius = type === 'grenade' ? 8 : 4;
+        this.lifetime = type === 'grenade' ? 2 : 3;
+        this.type = type;
+    }
+    
+    update(deltaTime) {
+        this.position = this.position.add(this.direction.multiply(this.speed * deltaTime));
+        this.lifetime -= deltaTime;
+    }
+    
+    draw(ctx, cameraX, cameraY) {
+        const screenX = this.position.x - cameraX;
+        const screenY = this.position.y - cameraY;
+        
+        if (this.type === 'grenade') {
+            ctx.fillStyle = '#00ff00';
+            ctx.beginPath();
+            ctx.arc(screenX, screenY, this.radius, 0, Math.PI * 2);
+            ctx.fill();
+        } else {
+            ctx.fillStyle = '#ffff00';
+            ctx.beginPath();
+            ctx.arc(screenX, screenY, this.radius, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+}
+
 class Ingredient {
     constructor(x, y, type) {
         this.position = new Vector2(x, y);
         this.radius = 8;
-        this.type = type; // 'cure' or 'food'
+        this.type = type;
         this.collected = false;
         this.pulse = 0;
     }
@@ -195,7 +425,6 @@ class Ingredient {
         const screenX = this.position.x - cameraX;
         const screenY = this.position.y - cameraY;
         
-        // Pulsing glow effect
         const scale = 1 + Math.sin(this.pulse * 4) * 0.2;
         
         ctx.fillStyle = this.type === 'cure' ? '#ffff00' : '#ff8800';
@@ -203,7 +432,6 @@ class Ingredient {
         ctx.arc(screenX, screenY, this.radius * scale, 0, Math.PI * 2);
         ctx.fill();
         
-        // Glow
         ctx.strokeStyle = this.type === 'cure' ? 'rgba(255,255,0,0.5)' : 'rgba(255,136,0,0.5)';
         ctx.lineWidth = 2;
         ctx.beginPath();
@@ -212,29 +440,42 @@ class Ingredient {
     }
 }
 
-class Projectile {
-    constructor(x, y, dirX, dirY, damage) {
+class PowerUp {
+    constructor(x, y, type) {
         this.position = new Vector2(x, y);
-        this.direction = new Vector2(dirX, dirY).normalize();
-        this.speed = 400;
-        this.damage = damage;
-        this.radius = 4;
-        this.lifetime = 3;
+        this.radius = 10;
+        this.type = type; // 'health' or 'ammo'
+        this.collected = false;
+        this.pulse = 0;
     }
     
     update(deltaTime) {
-        this.position = this.position.add(this.direction.multiply(this.speed * deltaTime));
-        this.lifetime -= deltaTime;
+        this.pulse += deltaTime;
     }
     
     draw(ctx, cameraX, cameraY) {
         const screenX = this.position.x - cameraX;
         const screenY = this.position.y - cameraY;
         
-        ctx.fillStyle = '#ffff00';
+        const scale = 1 + Math.sin(this.pulse * 3) * 0.3;
+        
+        ctx.fillStyle = this.type === 'health' ? '#ff0000' : '#0099ff';
         ctx.beginPath();
-        ctx.arc(screenX, screenY, this.radius, 0, Math.PI * 2);
+        ctx.arc(screenX, screenY, this.radius * scale, 0, Math.PI * 2);
         ctx.fill();
+        
+        ctx.strokeStyle = this.type === 'health' ? 'rgba(255,0,0,0.7)' : 'rgba(0,153,255,0.7)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, this.radius * scale + 5, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        // Draw icon
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 12px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(this.type === 'health' ? '+' : '🔫', screenX, screenY);
     }
 }
 
@@ -250,14 +491,12 @@ class Base {
         const screenX = this.position.x - cameraX;
         const screenY = this.position.y - cameraY;
         
-        // Draw base structure
         ctx.strokeStyle = '#00ff00';
         ctx.lineWidth = 3;
         ctx.beginPath();
         ctx.arc(screenX, screenY, this.radius, 0, Math.PI * 2);
         ctx.stroke();
         
-        // Draw health indicator
         const healthPercent = this.health / this.maxHealth;
         ctx.fillStyle = healthPercent > 0.5 ? '#00ff00' : '#ff4444';
         ctx.fillRect(screenX - 40, screenY - this.radius - 15, 80 * healthPercent, 4);
@@ -268,7 +507,119 @@ class Base {
     }
 }
 
-// Global game state
+// ============================================================================
+// AUDIO SYSTEM
+// ============================================================================
+
+class AudioSystem {
+    constructor() {
+        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        this.sounds = {};
+        this.loadSounds();
+    }
+    
+    loadSounds() {
+        // Procedurally generate sound effects
+        this.sounds.fire = () => this.playBeep(400, 0.1, 0.1);
+        this.sounds.reload = () => this.playBeep(600, 0.2, 0.05);
+        this.sounds.spawn = () => this.playBeep(200, 0.3, 0.1);
+        this.sounds.build = () => this.playBeep(800, 0.1, 0.1);
+        this.sounds.powerup = () => this.playBeep(1200, 0.15, 0.1);
+        this.sounds.damage = () => this.playBeep(300, 0.05, 0.15);
+        this.sounds.victory = () => this.playVictorySound();
+        this.sounds.gameover = () => this.playGameOverSound();
+    }
+    
+    playBeep(frequency, duration, volume) {
+        try {
+            const ctx = this.audioContext;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            
+            osc.frequency.value = frequency;
+            gain.gain.setValueAtTime(volume, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
+            
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + duration);
+        } catch (e) {
+            console.log('Audio error:', e);
+        }
+    }
+    
+    playVictorySound() {
+        const frequencies = [523, 659, 784];
+        frequencies.forEach((freq, i) => {
+            setTimeout(() => this.playBeep(freq, 0.3, 0.2), i * 150);
+        });
+    }
+    
+    playGameOverSound() {
+        const frequencies = [400, 300, 200];
+        frequencies.forEach((freq, i) => {
+            setTimeout(() => this.playBeep(freq, 0.4, 0.2), i * 150);
+        });
+    }
+    
+    play(soundName) {
+        if (this.sounds[soundName]) {
+            this.sounds[soundName]();
+        }
+    }
+}
+
+// ============================================================================
+// LEADERBOARD SYSTEM
+// ============================================================================
+
+class LeaderboardSystem {
+    constructor() {
+        this.scores = this.loadScores();
+    }
+    
+    loadScores() {
+        const stored = localStorage.getItem('zombie-survival-scores');
+        return stored ? JSON.parse(stored) : [];
+    }
+    
+    saveScores() {
+        localStorage.setItem('zombie-survival-scores', JSON.stringify(this.scores));
+    }
+    
+    addScore(name, score, wave, kills, ingredients) {
+        this.scores.push({
+            name,
+            score,
+            wave,
+            kills,
+            ingredients,
+            date: new Date().toLocaleDateString()
+        });
+        
+        this.scores.sort((a, b) => b.score - a.score);
+        this.scores = this.scores.slice(0, 10); // Keep top 10
+        
+        this.saveScores();
+        return this.scores.indexOf(this.scores.find(s => s.name === name && s.score === score)) + 1;
+    }
+    
+    getTopScores() {
+        return this.scores.slice(0, 10);
+    }
+    
+    isHighScore(score) {
+        if (this.scores.length < 10) return true;
+        return score > this.scores[this.scores.length - 1].score;
+    }
+}
+
+// ============================================================================
+// GLOBAL GAME STATE
+// ============================================================================
+
 const gameState = {
     initialized: false,
     running: false,
@@ -280,19 +631,19 @@ const gameState = {
     wave: 1,
     kills: 0,
     ingredientsFound: 0,
-    ammo: 30,
-    maxAmmo: 120,
     isInfected: false,
     ingredientsCured: 0,
-    gameOverMessage: '',
+    score: 0,
     startTime: Date.now(),
     
-    // Gameplay entities
+    // Entities
     player: null,
     base: null,
     zombies: [],
     projectiles: [],
     ingredients: [],
+    powerups: [],
+    particles: [],
     
     // Input
     playerInput: { x: 0, y: 0 },
@@ -307,26 +658,32 @@ const gameState = {
     // Wave system
     waveZombiesSpawned: 0,
     waveZombiesRemaining: 0,
+    waveZombiesToSpawn: 0,
     lastZombieSpawnTime: 0,
-    zombieSpawnInterval: 0.5,
+    zombieSpawnInterval: 0.3,
+    bossMeter: 0,
+    bossSpawned: false,
     
-    // Game loop
-    lastFireTime: 0,
-    fireRate: 0.1
+    // Systems
+    audio: null,
+    leaderboard: null
 };
 
-// Initialize game when document is ready
+// ============================================================================
+// INITIALIZATION & MAIN LOOP
+// ============================================================================
+
 document.addEventListener('DOMContentLoaded', () => {
     initializeGame();
 });
 
-/**
- * Initialize the game
- */
 function initializeGame() {
     console.log('Initializing Zombie Survival Game...');
     
     try {
+        gameState.audio = new AudioSystem();
+        gameState.leaderboard = new LeaderboardSystem();
+        
         setupEventListeners();
         
         const canvas = document.getElementById('canvas');
@@ -365,9 +722,6 @@ function initializeGame() {
     }
 }
 
-/**
- * Setup class selection
- */
 function setupClassSelection() {
     const classCards = document.querySelectorAll('.class-card');
     
@@ -379,14 +733,10 @@ function setupClassSelection() {
     });
 }
 
-/**
- * Handle class selection
- */
 function selectClass(classType) {
     gameState.selectedClass = classType;
     console.log('Selected class:', classType);
     
-    // Apply class bonuses
     let health = 100;
     switch(classType) {
         case 'soldier':
@@ -403,17 +753,13 @@ function selectClass(classType) {
             break;
     }
     
-    // Initialize game world
     gameState.playerHealth = health;
     gameState.player = new Player(gameState.worldWidth / 2, gameState.worldHeight / 2);
     gameState.player.maxHealth = health;
     gameState.player.health = health;
     gameState.base = new Base(gameState.worldWidth / 2, gameState.worldHeight / 2);
     
-    // Generate ingredients
     generateIngredients();
-    
-    // Spawn initial wave
     spawnWave();
     
     const classScreen = document.getElementById('class-screen');
@@ -425,14 +771,8 @@ function selectClass(classType) {
     startGameLoop();
 }
 
-/**
- * Generate ingredients on map
- */
 function generateIngredients() {
-    const cureTypes = ['Herb Root', 'Crystal Shard', 'Zombie DNA', 'Blue Flower', 'Ancient Artifact'];
-    const foodTypes = ['Apple', 'Water Bottle', 'Canned Food'];
-    
-    // Spawn 5 cure ingredients
+    // Cure ingredients
     for (let i = 0; i < 5; i++) {
         const angle = (Math.PI * 2 / 5) * i;
         const distance = 400;
@@ -441,7 +781,7 @@ function generateIngredients() {
         gameState.ingredients.push(new Ingredient(x, y, 'cure'));
     }
     
-    // Spawn food ingredients
+    // Food ingredients
     for (let i = 0; i < 10; i++) {
         const x = Math.random() * gameState.worldWidth;
         const y = Math.random() * gameState.worldHeight;
@@ -449,22 +789,19 @@ function generateIngredients() {
     }
 }
 
-/**
- * Spawn zombie wave
- */
 function spawnWave() {
     const zombieCount = 5 + (3 * gameState.wave);
     gameState.waveZombiesSpawned = 0;
+    gameState.waveZombiesToSpawn = zombieCount;
     gameState.waveZombiesRemaining = zombieCount;
     gameState.lastZombieSpawnTime = 0;
+    gameState.bossMeter = 0;
+    gameState.bossSpawned = false;
     console.log(`Wave ${gameState.wave}: Spawning ${zombieCount} zombies`);
 }
 
-/**
- * Setup event listeners
- */
 function setupEventListeners() {
-    // Keyboard input
+    // Keyboard
     document.addEventListener('keydown', (e) => {
         const key = e.key.toLowerCase();
         if (key === 'w' || key === 'arrowup') gameState.playerInput.y = -1;
@@ -473,7 +810,13 @@ function setupEventListeners() {
         if (key === 'd' || key === 'arrowright') gameState.playerInput.x = 1;
         
         if (key === 'escape') togglePauseMenu();
-        if (key === 'r') reloadWeapon();
+        if (key === 'r') {
+            if (gameState.player) gameState.player.weapon.reload();
+        }
+        if (key === '1') switchWeapon('pistol');
+        if (key === '2') switchWeapon('rifle');
+        if (key === '3') switchWeapon('shotgun');
+        if (key === '4') switchWeapon('grenade');
     });
     
     document.addEventListener('keyup', (e) => {
@@ -484,7 +827,7 @@ function setupEventListeners() {
         if (key === 'd' || key === 'arrowright') gameState.playerInput.x = 0;
     });
     
-    // Mouse input for firing
+    // Mouse
     document.addEventListener('mousemove', (e) => {
         const canvas = document.getElementById('canvas');
         const rect = canvas.getBoundingClientRect();
@@ -503,19 +846,6 @@ function setupEventListeners() {
         gameState.fireInput.active = false;
     });
     
-    // Touch input fallback
-    const touchInput = {
-        x: 0,
-        y: 0
-    };
-    
-    document.addEventListener('touchmove', (e) => {
-        if (touchControls) {
-            gameState.playerInput = touchControls.getMovement();
-            gameState.fireInput = touchControls.getFiring();
-        }
-    });
-    
     // Game buttons
     const restartBtn = document.getElementById('restart-btn');
     if (restartBtn) restartBtn.addEventListener('click', restartGame);
@@ -528,33 +858,15 @@ function setupEventListeners() {
     
     const quitBtn = document.getElementById('quit-btn');
     if (quitBtn) quitBtn.addEventListener('click', goToMenu);
-    
-    // Mobile actions
-    document.addEventListener('mobileAction', (e) => {
-        handleMobileAction(e.detail.action);
-    });
 }
 
-/**
- * Handle mobile actions
- */
-function handleMobileAction(action) {
-    switch(action) {
-        case 'reload':
-            reloadWeapon();
-            break;
-        case 'build':
-            upgradBase();
-            break;
-        case 'use-item':
-            useItem();
-            break;
+function switchWeapon(weaponType) {
+    if (gameState.player) {
+        gameState.player.weapon.setType(weaponType);
+        gameState.audio.play('reload');
     }
 }
 
-/**
- * Start the game loop
- */
 function startGameLoop() {
     gameState.running = true;
     gameState.startTime = Date.now();
@@ -565,7 +877,7 @@ function startGameLoop() {
         if (!gameState.running) return;
         
         const now = Date.now();
-        const deltaTime = Math.min((now - lastTime) / 1000, 0.016); // Cap at 60 FPS
+        const deltaTime = Math.min((now - lastTime) / 1000, 0.016);
         lastTime = now;
         
         if (!gameState.paused) {
@@ -580,9 +892,6 @@ function startGameLoop() {
     gameLoop();
 }
 
-/**
- * Update game state
- */
 function updateGameState(deltaTime) {
     if (!gameState.player || !gameState.base) return;
     
@@ -591,12 +900,13 @@ function updateGameState(deltaTime) {
     // Update player
     gameState.player.update(deltaTime, gameState.playerInput);
     gameState.playerHealth = gameState.player.health;
+    gameState.score = gameState.player.score;
     
-    // Update hunger and thirst
+    // Update hunger/thirst
     gameState.playerHunger = Math.max(0, gameState.playerHunger - 0.05);
     gameState.playerThirst = Math.max(0, gameState.playerThirst - 0.07);
     
-    // Apply damage from hunger/thirst
+    // Damage from hunger/thirst
     if (gameState.playerHunger <= 0) {
         gameState.player.takeDamage(0.1);
     }
@@ -604,59 +914,91 @@ function updateGameState(deltaTime) {
         gameState.player.takeDamage(0.1);
     }
     
-    // Apply infection damage
+    // Infection damage
     if (gameState.isInfected) {
-        gameState.player.takeDamage(0.05);
+        gameState.player.takeDamage(0.03);
     }
     
-    // Spawn zombies for current wave
+    // Spawn zombies
     gameState.lastZombieSpawnTime += deltaTime;
-    if (gameState.waveZombiesSpawned < gameState.waveZombiesRemaining && 
+    if (gameState.waveZombiesSpawned < gameState.waveZombiesToSpawn && 
         gameState.lastZombieSpawnTime > gameState.zombieSpawnInterval) {
         spawnZombie(isNight);
         gameState.waveZombiesSpawned++;
         gameState.lastZombieSpawnTime = 0;
     }
     
+    // Boss spawn at 50% wave completion
+    if (!gameState.bossSpawned && gameState.waveZombiesSpawned >= gameState.waveZombiesToSpawn * 0.5) {
+        spawnBoss();
+        gameState.bossSpawned = true;
+    }
+    
     // Update zombies
-    gameState.zombies.forEach((zombie, index) => {
+    gameState.zombies = gameState.zombies.filter(zombie => {
         zombie.update(deltaTime, gameState.player, isNight);
         
-        // Check if zombie is attacking player
-        if (zombie.attacking && zombie.canAttack()) {
-            gameState.player.takeDamage(5);
+        if (!zombie.isDying && zombie.attacking && zombie.canAttack()) {
+            gameState.player.takeDamage(zombie.isBoss ? 10 : 5);
             zombie.attackCooldown = 1;
+            gameState.audio.play('damage');
         }
         
-        // Check if zombie should be removed
-        if (zombie.health <= 0) {
-            gameState.zombies.splice(index, 1);
-            gameState.kills++;
-        }
+        return !(zombie.isDying && zombie.deathTime <= 0);
     });
     
     // Update projectiles
     gameState.projectiles = gameState.projectiles.filter(proj => {
         proj.update(deltaTime);
         
-        // Check collision with zombies
+        let hitSomething = false;
+        
         gameState.zombies.forEach(zombie => {
-            if (proj.position.distance(zombie.position) < proj.radius + zombie.radius) {
+            if (!zombie.isDying && proj.position.distance(zombie.position) < proj.radius + zombie.radius) {
                 if (zombie.takeDamage(proj.damage)) {
-                    // Zombie died
+                    gameState.kills++;
+                    gameState.player.score += (zombie.isBoss ? 500 : 100);
+                    
+                    // Create blood particles
+                    for (let i = 0; i < 10; i++) {
+                        gameState.particles.push(new Particle(zombie.position.x, zombie.position.y, 'blood'));
+                    }
                 }
-                proj.lifetime = 0; // Remove projectile
+                hitSomething = true;
             }
         });
         
-        return proj.lifetime > 0;
+        // Grenade explosion
+        if (proj.type === 'grenade' && proj.lifetime <= 0) {
+            const explosionRadius = 150;
+            gameState.zombies.forEach(zombie => {
+                if (proj.position.distance(zombie.position) < explosionRadius) {
+                    if (zombie.takeDamage(proj.damage * 0.5)) {
+                        gameState.kills++;
+                        gameState.player.score += (zombie.isBoss ? 500 : 100);
+                    }
+                }
+            });
+            
+            // Explosion particles
+            for (let i = 0; i < 20; i++) {
+                gameState.particles.push(new Particle(proj.position.x, proj.position.y, 'explosion'));
+            }
+        }
+        
+        return proj.lifetime > 0 && !hitSomething;
+    });
+    
+    // Update particles
+    gameState.particles = gameState.particles.filter(p => {
+        p.update(deltaTime);
+        return p.lifetime > 0;
     });
     
     // Update ingredients
-    gameState.ingredients.forEach((ingredient, index) => {
+    gameState.ingredients = gameState.ingredients.filter(ingredient => {
         ingredient.update(deltaTime);
         
-        // Check collection
         if (!ingredient.collected && 
             gameState.player.position.distance(ingredient.position) < gameState.player.radius + 20) {
             ingredient.collected = true;
@@ -664,64 +1006,131 @@ function updateGameState(deltaTime) {
             
             if (ingredient.type === 'cure') {
                 gameState.ingredientsCured++;
+                gameState.player.score += 50;
+                
                 if (!gameState.isInfected && Math.random() < 0.3) {
                     gameState.isInfected = true;
+                    gameState.audio.play('damage');
                 }
             } else {
-                gameState.playerHunger = Math.min(100, gameState.playerHunger + 20);
+                gameState.playerHunger = Math.min(100, gameState.playerHunger + 30);
             }
+            
+            gameState.audio.play('powerup');
         }
+        
+        return !ingredient.collected;
     });
     
-    // Remove collected ingredients
-    gameState.ingredients = gameState.ingredients.filter(i => !i.collected);
+    // Update powerups
+    gameState.powerups = gameState.powerups.filter(powerup => {
+        powerup.update(deltaTime);
+        
+        if (!powerup.collected && 
+            gameState.player.position.distance(powerup.position) < gameState.player.radius + 20) {
+            powerup.collected = true;
+            
+            if (powerup.type === 'health') {
+                gameState.player.heal(50);
+            } else {
+                gameState.player.weapon.ammo = gameState.player.weapon.maxAmmo;
+                gameState.player.weapon.magazine = gameState.player.weapon.maxMagazine;
+            }
+            
+            gameState.audio.play('powerup');
+        }
+        
+        return !powerup.collected;
+    });
     
-    // Handle firing
-    if (gameState.fireInput.active && gameState.lastFireTime <= 0) {
+    // Weapon firing
+    if (gameState.fireInput.active && gameState.player.weapon.canFire()) {
         const direction = new Vector2(gameState.fireInput.x, gameState.fireInput.y);
         if (direction.magnitude() < 10) {
-            // Use player's last direction if fire input is near center
             direction.x = gameState.player.fireDirection.x;
             direction.y = gameState.player.fireDirection.y;
         }
         
         gameState.player.fireDirection = direction.normalize();
         
-        // Create projectile
-        const projectile = new Projectile(
-            gameState.player.position.x,
-            gameState.player.position.y,
-            direction.x,
-            direction.y,
-            10
-        );
-        gameState.projectiles.push(projectile);
-        gameState.ammo--;
-        
-        gameState.lastFireTime = gameState.fireRate;
-        
-        // Play sound effect
-        playSound('fire');
+        if (gameState.player.weapon.fire()) {
+            const weaponType = gameState.player.weapon.type;
+            const damage = gameState.player.weapon.damage;
+            
+            if (weaponType === 'shotgun') {
+                // 5 pellets
+                for (let i = 0; i < 5; i++) {
+                    const proj = new Projectile(
+                        gameState.player.position.x,
+                        gameState.player.position.y,
+                        direction.x,
+                        direction.y,
+                        damage,
+                        'bullet',
+                        5
+                    );
+                    gameState.projectiles.push(proj);
+                }
+            } else if (weaponType === 'grenade') {
+                const proj = new Projectile(
+                    gameState.player.position.x,
+                    gameState.player.position.y,
+                    direction.x,
+                    direction.y,
+                    damage,
+                    'grenade'
+                );
+                gameState.projectiles.push(proj);
+            } else {
+                const proj = new Projectile(
+                    gameState.player.position.x,
+                    gameState.player.position.y,
+                    direction.x,
+                    direction.y,
+                    damage,
+                    'bullet'
+                );
+                gameState.projectiles.push(proj);
+            }
+            
+            // Muzzle flash particles
+            for (let i = 0; i < 3; i++) {
+                gameState.particles.push(new Particle(
+                    gameState.player.position.x + direction.x * 15,
+                    gameState.player.position.y + direction.y * 15,
+                    'explosion'
+                ));
+            }
+            
+            gameState.audio.play('fire');
+        }
     }
     
-    gameState.lastFireTime -= deltaTime;
-    
-    // Update camera to follow player
+    // Camera follow
     const canvas = document.getElementById('canvas');
     gameState.cameraX = gameState.player.position.x - canvas.width / 2;
     gameState.cameraY = gameState.player.position.y - canvas.height / 2;
-    
-    // Clamp camera
     gameState.cameraX = Math.max(0, Math.min(gameState.cameraX, gameState.worldWidth - canvas.width));
     gameState.cameraY = Math.max(0, Math.min(gameState.cameraY, gameState.worldHeight - canvas.height));
     
-    // Check wave completion
-    if (gameState.zombies.length === 0 && gameState.waveZombiesSpawned >= gameState.waveZombiesRemaining) {
+    // Wave completion
+    if (gameState.zombies.length === 0 && gameState.waveZombiesSpawned >= gameState.waveZombiesToSpawn) {
         gameState.wave++;
+        
+        // Spawn powerups on wave complete
+        for (let i = 0; i < 2; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const distance = 300;
+            const x = gameState.player.position.x + Math.cos(angle) * distance;
+            const y = gameState.player.position.y + Math.sin(angle) * distance;
+            gameState.powerups.push(new PowerUp(x, y, i === 0 ? 'health' : 'ammo'));
+        }
+        
         spawnWave();
+        gameState.audio.play('victory');
     }
     
-    // Check win/lose conditions
+    // Win/lose
     if (gameState.player.health <= 0) {
         gameOver(false);
     }
@@ -731,9 +1140,35 @@ function updateGameState(deltaTime) {
     }
 }
 
-/**
- * Get current game time
- */
+function spawnZombie(isNight) {
+    const angle = Math.random() * Math.PI * 2;
+    const distance = 400 + Math.random() * 200;
+    
+    const x = gameState.player.position.x + Math.cos(angle) * distance;
+    const y = gameState.player.position.y + Math.sin(angle) * distance;
+    
+    const isInfected = Math.random() < 0.3;
+    const zombie = new Zombie(x, y, isInfected, false);
+    
+    if (isNight) zombie.speed *= 1.2;
+    
+    gameState.zombies.push(zombie);
+    gameState.audio.play('spawn');
+}
+
+function spawnBoss() {
+    const angle = Math.random() * Math.PI * 2;
+    const distance = 500;
+    
+    const x = gameState.player.position.x + Math.cos(angle) * distance;
+    const y = gameState.player.position.y + Math.sin(angle) * distance;
+    
+    const boss = new Zombie(x, y, true, true);
+    gameState.zombies.push(boss);
+    gameState.audio.play('spawn');
+    console.log('Boss spawned!');
+}
+
 function getGameTime() {
     const elapsed = (Date.now() - gameState.startTime) / 1000;
     const gameHour = Math.floor((elapsed / 60) % 24) + 6;
@@ -745,63 +1180,29 @@ function getGameTime() {
     return { hour: parseInt(hour), minute: gameMinute, display: `${hour}:${minute}` };
 }
 
-/**
- * Check if it's night time
- */
 function isNightTime() {
     const time = getGameTime();
     return time.hour >= 18 || time.hour < 6;
 }
 
-/**
- * Spawn a single zombie
- */
-function spawnZombie(isNight) {
-    const angle = Math.random() * Math.PI * 2;
-    const distance = 400 + Math.random() * 200;
-    
-    const x = gameState.player.position.x + Math.cos(angle) * distance;
-    const y = gameState.player.position.y + Math.sin(angle) * distance;
-    
-    const isInfected = Math.random() < 0.3;
-    const zombie = new Zombie(x, y, isInfected);
-    
-    if (isNight) {
-        zombie.speed *= 1.2;
-    }
-    
-    gameState.zombies.push(zombie);
-    playSound('spawn');
-}
-
-/**
- * Update UI elements
- */
 function updateUI() {
     const healthBar = document.getElementById('health-bar');
-    if (healthBar) {
-        healthBar.style.width = Math.max(0, gameState.playerHealth) + '%';
-    }
+    if (healthBar) healthBar.style.width = Math.max(0, gameState.playerHealth) + '%';
     
     const hungerBar = document.getElementById('hunger-bar');
-    if (hungerBar) {
-        hungerBar.style.width = Math.max(0, gameState.playerHunger) + '%';
-    }
+    if (hungerBar) hungerBar.style.width = Math.max(0, gameState.playerHunger) + '%';
     
     const thirstBar = document.getElementById('thirst-bar');
-    if (thirstBar) {
-        thirstBar.style.width = Math.max(0, gameState.playerThirst) + '%';
-    }
+    if (thirstBar) thirstBar.style.width = Math.max(0, gameState.playerThirst) + '%';
     
     const ammoDisplay = document.getElementById('ammo-display');
     if (ammoDisplay) {
-        ammoDisplay.textContent = `Ammo: ${Math.max(0, gameState.ammo)}/${gameState.maxAmmo}`;
+        const weapon = gameState.player.weapon;
+        ammoDisplay.textContent = `${weapon.type.toUpperCase()} ${weapon.magazine}/${weapon.ammo}`;
     }
     
     const waveDisplay = document.getElementById('wave-display');
-    if (waveDisplay) {
-        waveDisplay.textContent = `Wave: ${gameState.wave}`;
-    }
+    if (waveDisplay) waveDisplay.textContent = `Wave: ${gameState.wave}`;
     
     const infectionDisplay = document.getElementById('infection-display');
     if (infectionDisplay) {
@@ -815,40 +1216,19 @@ function updateUI() {
     }
     
     const timeDisplay = document.getElementById('time-display');
-    if (timeDisplay) {
-        timeDisplay.textContent = getGameTime().display;
-    }
+    if (timeDisplay) timeDisplay.textContent = getGameTime().display;
 }
 
-/**
- * Render game
- */
 function renderGame() {
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
     
-    // Get time for day/night effect
     const isNight = isNightTime();
     
-    // Clear canvas with day/night background
-    if (isNight) {
-        ctx.fillStyle = '#0a0a1a';
-    } else {
-        ctx.fillStyle = '#1a2a1a';
-    }
+    ctx.fillStyle = isNight ? '#0a0a1a' : '#1a2a1a';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    // Draw world boundary
-    const boundaryLeft = -gameState.cameraX;
-    const boundaryTop = -gameState.cameraY;
-    const boundaryRight = gameState.worldWidth - gameState.cameraX;
-    const boundaryBottom = gameState.worldHeight - gameState.cameraY;
-    
-    ctx.strokeStyle = '#004400';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(boundaryLeft, boundaryTop, gameState.worldWidth, gameState.worldHeight);
-    
-    // Draw grid
+    // Grid
     ctx.strokeStyle = 'rgba(0,100,0,0.1)';
     ctx.lineWidth = 1;
     for (let x = Math.floor(gameState.cameraX / 100) * 100; x < gameState.cameraX + canvas.width; x += 100) {
@@ -864,120 +1244,49 @@ function renderGame() {
         ctx.stroke();
     }
     
-    // Draw base
-    if (gameState.base) {
-        gameState.base.draw(ctx, gameState.cameraX, gameState.cameraY);
-    }
+    // Draw all entities
+    if (gameState.base) gameState.base.draw(ctx, gameState.cameraX, gameState.cameraY);
+    gameState.ingredients.forEach(i => i.draw(ctx, gameState.cameraX, gameState.cameraY));
+    gameState.powerups.forEach(p => p.draw(ctx, gameState.cameraX, gameState.cameraY));
+    gameState.particles.forEach(p => p.draw(ctx, gameState.cameraX, gameState.cameraY));
+    gameState.zombies.forEach(z => z.draw(ctx, gameState.cameraX, gameState.cameraY));
+    gameState.projectiles.forEach(p => p.draw(ctx, gameState.cameraX, gameState.cameraY));
+    if (gameState.player) gameState.player.draw(ctx, gameState.cameraX, gameState.cameraY);
     
-    // Draw ingredients
-    gameState.ingredients.forEach(ingredient => {
-        ingredient.draw(ctx, gameState.cameraX, gameState.cameraY);
-    });
-    
-    // Draw zombies
-    gameState.zombies.forEach(zombie => {
-        zombie.draw(ctx, gameState.cameraX, gameState.cameraY);
-    });
-    
-    // Draw projectiles
-    gameState.projectiles.forEach(projectile => {
-        projectile.draw(ctx, gameState.cameraX, gameState.cameraY);
-    });
-    
-    // Draw player
-    if (gameState.player) {
-        gameState.player.draw(ctx, gameState.cameraX, gameState.cameraY);
-    }
-    
-    // Update minimap
     updateMinimap();
 }
 
-/**
- * Update minimap
- */
 function updateMinimap() {
     const minimap = document.getElementById('minimap');
     if (!minimap) return;
     
     const ctx = minimap.getContext('2d');
-    
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, minimap.width, minimap.height);
     
     const scaleX = minimap.width / gameState.worldWidth;
     const scaleY = minimap.height / gameState.worldHeight;
     
-    // Draw base
     if (gameState.base) {
         ctx.fillStyle = '#00ffff';
-        ctx.fillRect(
-            gameState.base.position.x * scaleX - 2,
-            gameState.base.position.y * scaleY - 2,
-            4, 4
-        );
+        ctx.fillRect(gameState.base.position.x * scaleX - 2, gameState.base.position.y * scaleY - 2, 4, 4);
     }
     
-    // Draw player
     if (gameState.player) {
         ctx.fillStyle = '#00ff00';
-        ctx.fillRect(
-            gameState.player.position.x * scaleX - 2,
-            gameState.player.position.y * scaleY - 2,
-            4, 4
-        );
+        ctx.fillRect(gameState.player.position.x * scaleX - 2, gameState.player.position.y * scaleY - 2, 4, 4);
     }
     
-    // Draw zombies
     ctx.fillStyle = '#ff0000';
-    gameState.zombies.forEach(zombie => {
-        ctx.fillRect(
-            zombie.position.x * scaleX - 1,
-            zombie.position.y * scaleY - 1,
-            2, 2
-        );
+    gameState.zombies.forEach(z => {
+        ctx.fillRect(z.position.x * scaleX - 1, z.position.y * scaleY - 1, 2, 2);
     });
     
-    // Border
     ctx.strokeStyle = '#00ff00';
     ctx.lineWidth = 1;
     ctx.strokeRect(0, 0, minimap.width, minimap.height);
 }
 
-/**
- * Reload weapon
- */
-function reloadWeapon() {
-    gameState.ammo = gameState.maxAmmo;
-    playSound('reload');
-    console.log('Weapon reloaded');
-}
-
-/**
- * Upgrade base
- */
-function upgradBase() {
-    if (gameState.base) {
-        gameState.base.maxHealth += 50;
-        gameState.base.health = gameState.base.maxHealth;
-        gameState.base.radius += 20;
-        playSound('build');
-        console.log('Base upgraded');
-    }
-}
-
-/**
- * Use item
- */
-function useItem() {
-    gameState.playerHunger = Math.min(100, gameState.playerHunger + 30);
-    playSound('use');
-    console.log('Item used');
-}
-
-/**
- * Toggle pause menu
- */
 function togglePauseMenu() {
     gameState.paused = !gameState.paused;
     const pauseMenu = document.getElementById('pause-menu');
@@ -986,9 +1295,6 @@ function togglePauseMenu() {
     }
 }
 
-/**
- * Game over
- */
 function gameOver(victory) {
     gameState.running = false;
     
@@ -999,9 +1305,6 @@ function gameOver(victory) {
     }
 }
 
-/**
- * Show game over screen
- */
 function showGameOverScreen() {
     const gameOverScreen = document.getElementById('game-over-screen');
     const uiOverlay = document.getElementById('ui-overlay');
@@ -1014,12 +1317,10 @@ function showGameOverScreen() {
         document.getElementById('ingredients-found').textContent = gameState.ingredientsFound;
         
         gameOverScreen.style.display = 'flex';
+        gameState.audio.play('gameover');
     }
 }
 
-/**
- * Show victory screen
- */
 function showVictoryScreen() {
     const victoryScreen = document.getElementById('victory-screen');
     const uiOverlay = document.getElementById('ui-overlay');
@@ -1031,13 +1332,20 @@ function showVictoryScreen() {
         document.getElementById('victory-waves').textContent = gameState.wave;
         document.getElementById('playtime').textContent = `${playtime}m`;
         
+        // Add to leaderboard
+        const rank = gameState.leaderboard.addScore(
+            gameState.selectedClass,
+            gameState.score,
+            gameState.wave,
+            gameState.kills,
+            gameState.ingredientsFound
+        );
+        
         victoryScreen.style.display = 'flex';
+        gameState.audio.play('victory');
     }
 }
 
-/**
- * Restart game
- */
 function restartGame() {
     gameState.playerHealth = 100;
     gameState.playerHunger = 100;
@@ -1045,13 +1353,15 @@ function restartGame() {
     gameState.wave = 1;
     gameState.kills = 0;
     gameState.ingredientsFound = 0;
-    gameState.ammo = 30;
     gameState.isInfected = false;
     gameState.ingredientsCured = 0;
+    gameState.score = 0;
     gameState.selectedClass = null;
     gameState.zombies = [];
     gameState.projectiles = [];
     gameState.ingredients = [];
+    gameState.powerups = [];
+    gameState.particles = [];
     
     const gameOverScreen = document.getElementById('game-over-screen');
     const victoryScreen = document.getElementById('victory-screen');
@@ -1062,16 +1372,10 @@ function restartGame() {
     if (classScreen) classScreen.style.display = 'flex';
 }
 
-/**
- * Go to menu
- */
 function goToMenu() {
     restartGame();
 }
 
-/**
- * Resize game canvas
- */
 function resizeGameCanvas() {
     const canvas = document.getElementById('canvas');
     if (canvas) {
@@ -1080,9 +1384,6 @@ function resizeGameCanvas() {
     }
 }
 
-/**
- * Show error message
- */
 function showErrorMessage(message) {
     const loadingScreen = document.getElementById('loading');
     if (loadingScreen) {
@@ -1090,33 +1391,6 @@ function showErrorMessage(message) {
     }
 }
 
-/**
- * Play sound effect (placeholder)
- */
-function playSound(soundType) {
-    // Sound effects can be added later using Web Audio API
-    // For now, this is a placeholder
-    switch(soundType) {
-        case 'fire':
-            // Create beep sound for firing
-            if (window.audioContext === undefined) {
-                window.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            const ctx = window.audioContext;
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-            osc.frequency.value = 400;
-            gain.gain.setValueAtTime(0.1, ctx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
-            osc.start(ctx.currentTime);
-            osc.stop(ctx.currentTime + 0.1);
-            break;
-    }
-}
-
-// Export for module systems
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = { gameState, initializeGame };
 }
