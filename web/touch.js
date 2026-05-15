@@ -215,20 +215,32 @@ document.addEventListener('keyup', (e) => {
 });
 
 function getPlayerInput() {
-    let x = 0, y = 0;
-    if (touchControls) {
+    let x = 0;
+    let y = 0;
+    
+    // 1. Prioritize Mobile Touch Joystick
+    if (touchControls && touchControls.joystickActive) {
         const movement = touchControls.getMovement();
-        x = movement.x; y = movement.y;
+        x = movement.x;
+        y = movement.y;
+    } 
+    // 2. Fallback to Keyboard if no active touch input
+    else {
+        if (keyboardState.w || keyboardState.up) y -= 1;
+        if (keyboardState.s || keyboardState.down) y += 1;
+        if (keyboardState.a || keyboardState.left) x -= 1;
+        if (keyboardState.d || keyboardState.right) x += 1;
+        
+        // Normalize keyboard diagonal speed
+        const magnitude = Math.sqrt(x * x + y * y);
+        if (magnitude > 1) { 
+            x /= magnitude; 
+            y /= magnitude; 
+        }
     }
-    if (keyboardState.w || keyboardState.up) y -= 1;
-    if (keyboardState.s || keyboardState.down) y += 1;
-    if (keyboardState.a || keyboardState.left) x -= 1;
-    if (keyboardState.d || keyboardState.right) x += 1;
-    const magnitude = Math.sqrt(x * x + y * y);
-    if (magnitude > 1) { x /= magnitude; y /= magnitude; }
+    
     return { x, y };
 }
-
 function getFireInput() {
     if (!touchControls) return { x: 0, y: 0, active: false };
     return touchControls.getFiring();
