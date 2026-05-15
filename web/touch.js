@@ -261,23 +261,32 @@ document.addEventListener('DOMContentLoaded', () => {
     const classCards = document.querySelectorAll('.class-card');
     const classScreen = document.getElementById('class-screen');
     const uiOverlay = document.getElementById('ui-overlay');
+    const loadingScreen = document.getElementById('loading');
+
+    const handleSelection = (e, card) => {
+        e.preventDefault();
+        
+        // Safely pull the attribute from the card element container regardless of touch target child elements
+        const selectedClass = card.getAttribute('data-class');
+        if (!selectedClass) return;
+
+        // 1. Hide Selection Screen and Loading Screen Modals, then show HUD Controls
+        if (classScreen) classScreen.style.display = 'none';
+        if (loadingScreen) loadingScreen.style.display = 'none';
+        if (uiOverlay) uiOverlay.style.display = 'block';
+        
+        // 2. Alert the underlying Emscripten game engine loop to spawn the class
+        const event = new CustomEvent('mobileAction', { 
+            detail: { action: `spawn-${selectedClass}` } 
+        });
+        document.dispatchEvent(event);
+        
+        console.log(`Class selected and spawned: ${selectedClass}`);
+    };
 
     classCards.forEach(card => {
-        card.addEventListener('touchstart', (e) => { ... })
-            e.preventDefault();
-            const selectedClass = card.getAttribute('data-class');
-            
-            // 1. Hide Selection Screen Modal and Reveal the HUD Controls
-            classScreen.style.display = 'none';
-            uiOverlay.style.display = 'block';
-            
-            // 2. Alert your game loop engine which class has spawned
-            const event = new CustomEvent('mobileAction', { 
-                detail: { action: `spawn-${selectedClass}` } 
-            });
-            document.dispatchEvent(event);
-            
-            console.log(`Class selected and spawned: ${selectedClass}`);
-        }, { passive: false });
+        card.addEventListener('touchstart', (e) => handleSelection(e, card), { passive: false });
+        card.addEventListener('click', (e) => handleSelection(e, card));
     });
+});
 });
