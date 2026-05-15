@@ -249,9 +249,15 @@ function getFireInput() {
 function resizeCanvas() {
     const canvas = document.getElementById('canvas');
     if (!canvas) return;
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    document.dispatchEvent(new CustomEvent('canvasResize', { detail: { width: canvas.width, height: canvas.height } }));
+    
+    // Force a fallback height and width configuration if inner windows report 0
+    canvas.width = window.innerWidth || 800;
+    canvas.height = window.innerHeight || 600;
+    
+    document.dispatchEvent(new CustomEvent('canvasResize', { 
+        detail: { width: canvas.width, height: canvas.height } 
+    }));
+}
 }
 window.addEventListener('resize', resizeCanvas);
 window.addEventListener('orientationchange', () => { setTimeout(resizeCanvas, 100); });
