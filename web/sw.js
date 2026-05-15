@@ -3,13 +3,13 @@
  * Enables offline gameplay and caching
  */
 
-const CACHE_NAME = 'zombie-survival-v7';
+const CACHE_NAME = 'zombie-survival-v8'; // 1. Bump from v7 to v8
 const ASSETS_TO_CACHE = [
     '/',
     '/index.html',
     '/style.css',
     '/touch.js',
-    '/game.js',
+    '/zombie-survival.js', // 2. Fixed filename mismatch here
     '/manifest.json',
     '/sw.js'
 ];
