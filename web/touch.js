@@ -276,7 +276,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (classScreen) classScreen.style.display = 'none';
         if (loadingScreen) loadingScreen.style.display = 'none';
         if (uiOverlay) uiOverlay.style.display = 'block';
-        
+
         // Dispatch custom event to initialize the WebAssembly engine simulation loop
         const event = new CustomEvent('mobileAction', { 
             detail: { action: `spawn-${selectedClass}` } 
@@ -284,9 +284,8 @@ document.addEventListener('DOMContentLoaded', () => {
         document.dispatchEvent(event);
     };
 
-   if (classScreen) {
+    if (classScreen) {
         classScreen.addEventListener('touchstart', handleSelection, { passive: false });
         classScreen.addEventListener('click', handleSelection);
     }
-}); // <-- This bracket closes DOMContentLoaded correctly
-}); // <-- TYPO: This extra bracket crashes the script compiler, disabling TouchControls entirely!
+});
