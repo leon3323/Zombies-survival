@@ -256,3 +256,28 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 window.addEventListener('orientationchange', () => { setTimeout(resizeCanvas, 100); });
 resizeCanvas();
+// Connect the Starting Character Selection UI to the Game Engine Loop
+document.addEventListener('DOMContentLoaded', () => {
+    const classCards = document.querySelectorAll('.class-card');
+    const classScreen = document.getElementById('class-screen');
+    const uiOverlay = document.getElementById('ui-overlay');
+
+    classCards.forEach(card => {
+        card.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const selectedClass = card.getAttribute('data-class');
+            
+            // 1. Hide Selection Screen Modal and Reveal the HUD Controls
+            classScreen.style.display = 'none';
+            uiOverlay.style.display = 'block';
+            
+            // 2. Alert your game loop engine which class has spawned
+            const event = new CustomEvent('mobileAction', { 
+                detail: { action: `spawn-${selectedClass}` } 
+            });
+            document.dispatchEvent(event);
+            
+            console.log(`Class selected and spawned: ${selectedClass}`);
+        }, { passive: false });
+    });
+});
