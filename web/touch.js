@@ -1,6 +1,6 @@
 /**
- * Mobile Touch Controls for Zombie Survival
- * Handles virtual joystick, firing, and action buttons
+ * Mobile Touch Controls for Zombie Survival - Optimized Version
+ * Handles proper multi-touch tracking, relative aiming mechanics, and latency-free input
  */
 
 class TouchControls {
@@ -12,28 +12,27 @@ class TouchControls {
         this.fireX = 0;
         this.fireY = 0;
         
+        // Tracking touch IDs uniquely to prevent multi-touch overlap issues
+        this.joystickTouchId = null;
+        this.firingTouchId = null;
+        this.fireStartPoint = { x: 0, y: 0 };
+        
         this.init();
     }
     
     init() {
-        // Joystick
         const joystickContainer = document.getElementById('joystick');
         const joystickThumb = document.querySelector('.joystick-thumb');
+        const firingZone = document.getElementById('firing-zone');
         
         this.setupJoystick(joystickContainer, joystickThumb);
-        
-        // Firing Zone
-        const firingZone = document.getElementById('firing-zone');
         this.setupFiring(firingZone);
-        
-        // Action Buttons
         this.setupActionButtons();
         
-        // Prevent default touch behaviors
+        // Globally prevent scrolling/rubber-banding gestures while dragging on game interface
         document.addEventListener('touchmove', (e) => {
-            if (e.target === document.getElementById('canvas') ||
-                e.target.closest('.ui-overlay')) {
-                e.preventDefault();
+            if (e.target === document.getElementById('canvas') || e.target.closest('.ui-overlay')) {
+                if (e.cancelable) e.preventDefault();
             }
         }, { passive: false });
     }
@@ -43,138 +42,152 @@ class TouchControls {
      */
     setupJoystick(container, thumb) {
         let startX, startY;
-        const radius = container.offsetWidth / 2;
-        const centerX = container.offsetLeft + radius;
-        const centerY = container.offsetTop + radius;
+        // Dynamically compute size boundaries safely
+        const radius = container.offsetWidth / 2 || 50; 
         
         container.addEventListener('touchstart', (e) => {
+            if (this.joystickActive) return; // Guard logic
+            
             this.joystickActive = true;
-            const touch = e.touches[0];
+            const touch = e.changedTouches[0];
+            this.joystickTouchId = touch.identifier;
             startX = touch.clientX;
             startY = touch.clientY;
-        });
+        }, { passive: false });
         
         container.addEventListener('touchmove', (e) => {
             if (!this.joystickActive) return;
             
-            const touch = e.touches[0];
+            // Find our specific joystick touch handle from active cluster
+            const touch = Array.from(e.touches).find(t => t.identifier === this.joystickTouchId);
+            if (!touch) return;
+            
             let dx = touch.clientX - startX;
             let dy = touch.clientY - startY;
             
-            // Clamp to radius
             const distance = Math.sqrt(dx * dx + dy * dy);
             if (distance > radius) {
                 dx = (dx / distance) * radius;
                 dy = (dy / distance) * radius;
             }
             
-            // Update thumb position
+            // Instantly apply CSS transformation without frame delay
             thumb.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
             
-            // Normalize to -1 to 1
             this.joystickX = dx / radius;
             this.joystickY = dy / radius;
-        });
+        }, { passive: false });
         
-        container.addEventListener('touchend', (e) => {
-            this.joystickActive = false;
-            this.joystickX = 0;
-            this.joystickY = 0;
-            thumb.style.transform = 'translate(-50%, -50%)';
-        });
+        const endJoystick = (e) => {
+            if (!this.joystickActive) return;
+            const touchChanged = Array.from(e.changedTouches).some(t => t.identifier === this.joystickTouchId);
+            
+            if (touchChanged) {
+                this.joystickActive = false;
+                this.joystickTouchId = null;
+                this.joystickX = 0;
+                this.joystickY = 0;
+                thumb.style.transform = 'translate(-50%, -50%)';
+            }
+        };
+
+        container.addEventListener('touchend', endJoystick);
+        container.addEventListener('touchcancel', endJoystick);
     }
     
     /**
-     * Setup firing zone (right side of screen)
+     * Setup firing zone with responsive relative dragging vectors
      */
     setupFiring(firingZone) {
+        const dragLimit = 60; // Max drag vector length for full sensitivity reach
+        
         firingZone.addEventListener('touchstart', (e) => {
+            if (this.firingActive) return;
+            
             this.firingActive = true;
-            const touch = e.touches[0];
-            this.fireX = (touch.clientX / window.innerWidth - 0.5) * 2;
-            this.fireY = (touch.clientY / window.innerHeight - 0.5) * 2;
-        });
+            const touch = e.changedTouches[0];
+            this.firingTouchId = touch.identifier;
+            
+            // Remember starting point anchor to calculate a sliding aim vector
+            this.fireStartPoint.x = touch.clientX;
+            this.fireStartPoint.y = touch.clientY;
+            
+            this.fireX = 0;
+            this.fireY = 0;
+        }, { passive: false });
         
         firingZone.addEventListener('touchmove', (e) => {
             if (!this.firingActive) return;
             
-            const touch = e.touches[0];
-            this.fireX = (touch.clientX / window.innerWidth - 0.5) * 2;
-            this.fireY = (touch.clientY / window.innerHeight - 0.5) * 2;
-        });
+            const touch = Array.from(e.touches).find(t => t.identifier === this.firingTouchId);
+            if (!touch) return;
+            
+            let dx = touch.clientX - this.fireStartPoint.x;
+            let dy = touch.clientY - this.fireStartPoint.y;
+            
+            let dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist > dragLimit) {
+                dx = (dx / dist) * dragLimit;
+                dy = (dy / dist) * dragLimit;
+                dist = dragLimit;
+            }
+            
+            // Provide exact vectors normalized smoothly to game logic
+            this.fireX = dist > 5 ? (dx / dragLimit) : 0;
+            this.fireY = dist > 5 ? (dy / dragLimit) : 0;
+        }, { passive: false });
         
-        firingZone.addEventListener('touchend', (e) => {
-            this.firingActive = false;
-            this.fireX = 0;
-            this.fireY = 0;
-        });
+        const endFiring = (e) => {
+            if (!this.firingActive) return;
+            const touchChanged = Array.from(e.changedTouches).some(t => t.identifier === this.firingTouchId);
+            
+            if (touchChanged) {
+                this.firingActive = false;
+                this.firingTouchId = null;
+                this.fireX = 0;
+                this.fireY = 0;
+            }
+        };
+
+        firingZone.addEventListener('touchend', endFiring);
+        firingZone.addEventListener('touchcancel', endFiring);
     }
     
     /**
-     * Setup action buttons
+     * Setup rapid responsive action buttons
      */
     setupActionButtons() {
-        const reloadBtn = document.getElementById('reload-btn');
-        const buildBtn = document.getElementById('build-btn');
-        const useBtn = document.getElementById('use-btn');
+        const buttons = [
+            { id: 'reload-btn', action: 'reload' },
+            { id: 'build-btn', action: 'build' },
+            { id: 'use-btn', action: 'use-item' }
+        ];
         
-        reloadBtn.addEventListener('touchstart', () => {
-            this.fireEvent('reload');
-        });
-        
-        buildBtn.addEventListener('touchstart', () => {
-            this.fireEvent('build');
-        });
-        
-        useBtn.addEventListener('touchstart', () => {
-            this.fireEvent('use-item');
+        buttons.forEach(btnObj => {
+            const element = document.getElementById(btnObj.id);
+            if (!element) return;
+            
+            element.addEventListener('touchstart', (e) => {
+                e.preventDefault(); // Fully kills 300ms tap simulation latency delay
+                this.fireEvent(btnObj.action);
+            }, { passive: false });
         });
     }
     
-    /**
-     * Fire custom event for game
-     */
     fireEvent(action) {
         const event = new CustomEvent('mobileAction', { detail: { action } });
         document.dispatchEvent(event);
     }
     
-    /**
-     * Get movement input (-1 to 1)
-     */
-    getMovement() {
-        return {
-            x: this.joystickX,
-            y: this.joystickY
-        };
-    }
-    
-    /**
-     * Get firing input (-1 to 1)
-     */
-    getFiring() {
-        return {
-            x: this.fireX,
-            y: this.fireY,
-            active: this.firingActive
-        };
-    }
+    getMovement() { return { x: this.joystickX, y: this.joystickY }; }
+    getFiring() { return { x: this.fireX, y: this.fireY, active: this.firingActive }; }
 }
 
-// Initialize touch controls when page loads
+// Global scope fallbacks preservation
 let touchControls;
-document.addEventListener('DOMContentLoaded', () => {
-    touchControls = new TouchControls();
-});
+document.addEventListener('DOMContentLoaded', () => { touchControls = new TouchControls(); });
 
-/**
- * Keyboard fallback for testing on desktop
- */
-const keyboardState = {
-    w: false, a: false, s: false, d: false,
-    left: false, right: false, up: false, down: false
-};
-
+const keyboardState = { w: false, a: false, s: false, d: false, left: false, right: false, up: false, down: false };
 document.addEventListener('keydown', (e) => {
     const key = e.key.toLowerCase();
     if (key === 'w') keyboardState.w = true;
@@ -189,7 +202,6 @@ document.addEventListener('keydown', (e) => {
     if (key === 'b') document.dispatchEvent(new CustomEvent('mobileAction', { detail: { action: 'build' } }));
     if (key === 'e') document.dispatchEvent(new CustomEvent('mobileAction', { detail: { action: 'use-item' } }));
 });
-
 document.addEventListener('keyup', (e) => {
     const key = e.key.toLowerCase();
     if (key === 'w') keyboardState.w = false;
@@ -202,65 +214,33 @@ document.addEventListener('keyup', (e) => {
     if (key === 'arrowdown') keyboardState.down = false;
 });
 
-/**
- * Get input from either touch or keyboard
- */
 function getPlayerInput() {
     let x = 0, y = 0;
-    
     if (touchControls) {
         const movement = touchControls.getMovement();
-        x = movement.x;
-        y = movement.y;
+        x = movement.x; y = movement.y;
     }
-    
-    // Keyboard fallback
     if (keyboardState.w || keyboardState.up) y -= 1;
     if (keyboardState.s || keyboardState.down) y += 1;
     if (keyboardState.a || keyboardState.left) x -= 1;
     if (keyboardState.d || keyboardState.right) x += 1;
-    
-    // Normalize diagonal movement
     const magnitude = Math.sqrt(x * x + y * y);
-    if (magnitude > 1) {
-        x /= magnitude;
-        y /= magnitude;
-    }
-    
+    if (magnitude > 1) { x /= magnitude; y /= magnitude; }
     return { x, y };
 }
 
-/**
- * Get firing input from either touch or keyboard
- */
 function getFireInput() {
     if (!touchControls) return { x: 0, y: 0, active: false };
-    
     return touchControls.getFiring();
 }
 
-/**
- * Handle responsive canvas sizing
- */
 function resizeCanvas() {
     const canvas = document.getElementById('canvas');
     if (!canvas) return;
-    
-    const rect = canvas.getBoundingClientRect();
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-    
-    // Notify game of resize
-    const event = new CustomEvent('canvasResize', {
-        detail: { width: canvas.width, height: canvas.height }
-    });
-    document.dispatchEvent(event);
+    document.dispatchEvent(new CustomEvent('canvasResize', { detail: { width: canvas.width, height: canvas.height } }));
 }
-
 window.addEventListener('resize', resizeCanvas);
-window.addEventListener('orientationchange', () => {
-    setTimeout(resizeCanvas, 100);
-});
-
-// Initial setup
+window.addEventListener('orientationchange', () => { setTimeout(resizeCanvas, 100); });
 resizeCanvas();
