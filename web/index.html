@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Zombie Survival">
+    <meta name="theme-color" content="#1a1a1a">
+    <meta name="description" content="Survive the zombie apocalypse on mobile!">
+    
+    <!-- iOS App Icon -->
+    <link rel="apple-touch-icon" href="icon-180.png">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    
+    <title>Zombie Survival - Mobile</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Game Canvas -->
+    <canvas id="canvas"></canvas>
+    
+    <!-- Loading Screen -->
+    <div id="loading" class="loading-screen">
+        <div class="loading-spinner"></div>
+        <p>Loading Zombie Survival...</p>
+    </div>
+    
+    <!-- Game UI Overlay -->
+    <div id="ui-overlay" class="ui-overlay" style="display: none;">
+        <!-- Left Panel: Status -->
+        <div class="hud-left">
+            <div class="stat-bar">
+                <label>❤️ Health</label>
+                <div class="bar-container">
+                    <div id="health-bar" class="bar health"></div>
+                </div>
+            </div>
+            
+            <div class="stat-bar">
+                <label>🍖 Hunger</label>
+                <div class="bar-container">
+                    <div id="hunger-bar" class="bar hunger"></div>
+                </div>
+            </div>
+            
+            <div class="stat-bar">
+                <label>💧 Thirst</label>
+                <div class="bar-container">
+                    <div id="thirst-bar" class="bar thirst"></div>
+                </div>
+            </div>
+            
+            <div class="stat-info">
+                <p id="ammo-display">Ammo: 30/120</p>
+                <p id="wave-display">Wave: 1</p>
+                <p id="infection-display" class="safe">Safe</p>
+                <p id="time-display">06:00</p>
+            </div>
+        </div>
+        
+        <!-- Right Panel: Mini-map -->
+        <div class="hud-right">
+            <canvas id="minimap" width="150" height="150"></canvas>
+        </div>
+        
+        <!-- Bottom Controls -->
+        <div class="mobile-controls">
+            <!-- Virtual Joystick -->
+            <div class="joystick-container" id="joystick">
+                <div class="joystick-base"></div>
+                <div class="joystick-thumb"></div>
+            </div>
+            
+            <!-- Action Buttons -->
+            <div class="action-buttons">
+                <button class="action-btn reload-btn" id="reload-btn">
+                    <span>🔄 RELOAD</span>
+                </button>
+                <button class="action-btn build-btn" id="build-btn">
+                    <span>🏗️ BUILD</span>
+                </button>
+                <button class="action-btn use-btn" id="use-btn">
+                    <span>💊 USE</span>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Firing Zone (Right Side) -->
+        <div id="firing-zone" class="firing-zone"></div>
+    </div>
+    
+    <!-- Game Over Screen -->
+    <div id="game-over-screen" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h1 id="game-over-title">Game Over</h1>
+            <p id="game-over-message">You died!</p>
+            <div class="stats-display">
+                <p>Wave Survived: <span id="wave-survived">1</span></p>
+                <p>Zombies Killed: <span id="kills">0</span></p>
+                <p>Ingredients Found: <span id="ingredients-found">0</span></p>
+            </div>
+            <button class="btn-primary" id="restart-btn">Restart Game</button>
+            <button class="btn-secondary" id="menu-btn">Main Menu</button>
+        </div>
+    </div>
+    
+    <!-- Victory Screen -->
+    <div id="victory-screen" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h1>🎉 Victory!</h1>
+            <p>You found the cure and survived!</p>
+            <div class="stats-display">
+                <p>Waves Survived: <span id="victory-waves">5</span></p>
+                <p>Playtime: <span id="playtime">10:30</span></p>
+            </div>
+            <button class="btn-primary" id="continue-btn">Continue</button>
+        </div>
+    </div>
+    
+    <!-- Class Selection Screen -->
+    <div id="class-screen" class="modal">
+        <div class="modal-content">
+            <h1>Choose Your Class</h1>
+            <div class="class-selection">
+                <div class="class-card" data-class="soldier">
+                    <h3>⚔️ Soldier</h3>
+                    <p>High damage & health</p>
+                    <ul>
+                        <li>+10 Health</li>
+                        <li>+20% Damage</li>
+                    </ul>
+                </div>
+                <div class="class-card" data-class="scavenger">
+                    <h3>🏃 Scavenger</h3>
+                    <p>Fast & resourceful</p>
+                    <ul>
+                        <li>+30% Speed</li>
+                        <li>+50% Loot Find</li>
+                    </ul>
+                </div>
+                <div class="class-card" data-class="medic">
+                    <h3>🏥 Medic</h3>
+                    <p>Enhanced recovery</p>
+                    <ul>
+                        <li>+30 Health</li>
+                        <li>+15% Healing</li>
+                    </ul>
+                </div>
+                <div class="class-card" data-class="engineer">
+                    <h3>🔧 Engineer</h3>
+                    <p>Master builder</p>
+                    <ul>
+                        <li>+75% Build Speed</li>
+                        <li>+50 Base HP</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Pause Menu -->
+    <div id="pause-menu" class="modal" style="display: none;">
+        <div class="modal-content">
+            <h1>Paused</h1>
+            <button class="btn-primary" id="resume-btn">Resume</button>
+            <button class="btn-secondary" id="settings-btn">Settings</button>
+            <button class="btn-secondary" id="quit-btn">Quit to Menu</button>
+        </div>
+    </div>
+    
+    <!-- Emscripten Game Script -->
+    <script async src="zombie-survival.js"></script>
+    
+    <!-- Touch Controls Script -->
+    <script src="touch.js"></script>
+    
+    <!-- PWA Service Worker -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js')
+                .then(reg => console.log('Service Worker registered'))
+                .catch(err => console.log('Service Worker registration failed'));
+        }
+    </script>
+</body>
+</html>
