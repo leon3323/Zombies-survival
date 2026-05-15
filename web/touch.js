@@ -258,35 +258,35 @@ window.addEventListener('orientationchange', () => { setTimeout(resizeCanvas, 10
 resizeCanvas();
 // Connect the Starting Character Selection UI to the Game Engine Loop
 document.addEventListener('DOMContentLoaded', () => {
-    const classCards = document.querySelectorAll('.class-card');
     const classScreen = document.getElementById('class-screen');
     const uiOverlay = document.getElementById('ui-overlay');
     const loadingScreen = document.getElementById('loading');
 
-    const handleSelection = (e, card) => {
+    const handleSelection = (e) => {
         e.preventDefault();
         
-        // Safely pull the attribute from the card element container regardless of touch target child elements
+        // Climbs up the DOM tree to find the .class-card wrapper cleanly
+        const card = e.target.closest('.class-card');
+        if (!card) return;
+
         const selectedClass = card.getAttribute('data-class');
         if (!selectedClass) return;
 
-        // 1. Hide Selection Screen and Loading Screen Modals, then show HUD Controls
+        // Dismiss modals and mount the active touch HUD overlay
         if (classScreen) classScreen.style.display = 'none';
         if (loadingScreen) loadingScreen.style.display = 'none';
         if (uiOverlay) uiOverlay.style.display = 'block';
         
-        // 2. Alert the underlying Emscripten game engine loop to spawn the class
+        // Dispatch custom event to initialize the WebAssembly engine simulation loop
         const event = new CustomEvent('mobileAction', { 
             detail: { action: `spawn-${selectedClass}` } 
         });
         document.dispatchEvent(event);
-        
-        console.log(`Class selected and spawned: ${selectedClass}`);
     };
 
-    classCards.forEach(card => {
-        card.addEventListener('touchstart', (e) => handleSelection(e, card), { passive: false });
-        card.addEventListener('click', (e) => handleSelection(e, card));
-    });
+    if (classScreen) {
+        classScreen.addEventListener('touchstart', handleSelection, { passive: false });
+        classScreen.addEventListener('click', handleSelection);
+    }
 });
 });
