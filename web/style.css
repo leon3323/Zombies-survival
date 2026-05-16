@@ -15,6 +15,8 @@ html, body {
     background: #1a1a1a;
     color: #fff;
     font-family: Arial, sans-serif;
+    /* Fix: Prevent rubber-banding/bouncing scrolls on mobile browsers */
+    overscroll-behavior: none; 
 }
 
 body {
@@ -94,7 +96,7 @@ body {
     padding: 10px;
     border: 2px solid #00ff00;
     border-radius: 5px;
-    pointer-events: auto;
+    pointer-events: auto; /* Fix: explicitly handle layer propagation */
     z-index: 101;
     box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
 }
@@ -167,7 +169,7 @@ body {
     background: rgba(0, 0, 0, 0.7);
     border: 2px solid #00ff00;
     border-radius: 5px;
-    pointer-events: auto;
+    pointer-events: auto; /* Fix: isolation wrapper */
     z-index: 101;
     box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
     padding: 0;
@@ -192,7 +194,7 @@ body {
     justify-content: space-between;
     align-items: flex-end;
     padding: 10px;
-    pointer-events: auto;
+    pointer-events: none; /* Fix: Allow background spacing pass-through to game */
     z-index: 102;
 }
 
@@ -202,7 +204,8 @@ body {
     height: 120px;
     margin-left: 10px;
     margin-bottom: 10px;
-    touch-action: none !important; /* Force immediate touch response */
+    pointer-events: auto; /* Fix: Override parent "none" explicitly */
+    touch-action: none !important; 
 }
 
 .joystick-base {
@@ -236,6 +239,7 @@ body {
     flex: 1;
     justify-content: flex-end;
     max-width: 300px;
+    pointer-events: auto; /* Fix: Override parent none */
 }
 
 .action-btn {
@@ -254,7 +258,11 @@ body {
     white-space: nowrap;
     text-overflow: ellipsis;
     overflow: hidden;
-    touch-action: none !important; /* Add this line */
+    touch-action: none !important;
+}
+
+.action-btn:hover {
+    background: rgba(0, 255, 0, 0.3);
 }
 
 .action-btn:active {
@@ -271,7 +279,7 @@ body {
     height: calc(100% - 150px);
     pointer-events: auto;
     z-index: 103;
-    touch-action: none !important; /* Add this line */
+    touch-action: none !important; 
 }
 
 /* Modals */
@@ -299,6 +307,9 @@ body {
     overflow-y: auto;
     text-align: center;
     box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
+    /* Fix: Prevent blurry text sizing animations */
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
 }
 
 .modal-content h1 {
@@ -334,13 +345,20 @@ body {
     border-radius: 5px;
     padding: 15px;
     cursor: pointer;
-    transition: all 0.3s;
+    transition: all 0.2s ease-in-out;
     pointer-events: auto;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+}
+
+.class-card:hover {
+    background: rgba(0, 255, 0, 0.18);
+    box-shadow: 0 0 8px rgba(0, 255, 0, 0.2);
 }
 
 .class-card:active {
     background: rgba(0, 255, 0, 0.3);
-    transform: scale(1.05);
+    transform: scale(1.02); /* Fix: 1.05 scale causes layout shifting on some mobile setups */
 }
 
 .class-card h3 {
@@ -373,9 +391,11 @@ body {
     border: none;
     border-radius: 5px;
     cursor: pointer;
-    transition: all 0.3s;
+    transition: all 0.2s ease;
     pointer-events: auto;
     font-weight: bold;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
 }
 
 .btn-primary {
@@ -383,15 +403,24 @@ body {
     color: #1a1a1a;
 }
 
+.btn-primary:hover {
+    background: #00dd00;
+    box-shadow: 0 0 10px rgba(0, 255, 0, 0.4);
+}
+
 .btn-primary:active {
     transform: scale(0.95);
-    box-shadow: 0 0 10px rgba(0, 255, 0, 0.6);
+    box-shadow: 0 0 15px rgba(0, 255, 0, 0.7);
 }
 
 .btn-secondary {
     background: transparent;
     color: #00ff00;
     border: 2px solid #00ff00;
+}
+
+.btn-secondary:hover {
+    background: rgba(0, 255, 0, 0.1);
 }
 
 .btn-secondary:active {
