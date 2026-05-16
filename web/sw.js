@@ -3,15 +3,16 @@
  * Enables offline gameplay and caching
  */
 
-const CACHE_NAME = 'zombie-survival-v12';
+const CACHE_NAME = 'zombie-survival-v13';
+// Fix: Use relative paths to ensure compatibility with subfolder hosting (e.g., GitHub Pages)
 const ASSETS_TO_CACHE = [
-    '/',
-    '/index.html',
-    '/style.css',
-    '/touch.js',
-    '/zombie-survival.js', // 2. Fixed filename mismatch here
-    '/manifest.json',
-    '/sw.js'
+    './',
+    './index.html',
+    './style.css',
+    './touch.js',
+    './zombie-survival.js',
+    './manifest.json',
+    './sw.js'
 ];
 
 // Install event - cache resources
@@ -21,11 +22,12 @@ self.addEventListener('install', event => {
         caches.open(CACHE_NAME).then(cache => {
             console.log('[Service Worker] Caching assets');
             return cache.addAll(ASSETS_TO_CACHE).catch(err => {
-                console.log('[Service Worker] Cache error:', err);
-                // Continue even if some files fail to cache
-                return ASSETS_TO_CACHE.filter((_, i) => i < 3).forEach(url => {
-                    cache.add(url).catch(() => {});
-                });
+                console.log('[Service Worker] Cache error, falling back to core files:', err);
+                // Fix: map to an array of promises and pass them through Promise.all to preserve execution chain
+                const coreAssets = ASSETS_TO_CACHE.slice(0, 3);
+                return Promise.all(
+                    coreAssets.map(url => cache.add(url).catch(() => {}))
+                );
             });
         })
     );
@@ -65,22 +67,22 @@ self.addEventListener('fetch', event => {
             }
             
             // Otherwise fetch from network
-            return fetch(event.request).then(response => {
+            return fetch(event.request).then(networkResponse => {
                 // Don't cache non-2xx responses
-                if (!response || response.status !== 200 || response.type === 'error') {
-                    return response;
+                if (!networkResponse || networkResponse.status !== 200 || networkResponse.type === 'error') {
+                    return networkResponse;
                 }
                 
                 // Cache successful responses
-                const responseToCache = response.clone();
+                const responseToCache = networkResponse.clone();
                 caches.open(CACHE_NAME).then(cache => {
                     cache.put(event.request, responseToCache);
                 });
                 
-                return response;
+                return networkResponse;
             }).catch(err => {
-                // Return offline page or cached version
                 console.log('[Service Worker] Fetch failed:', err);
+                // Try fallback to cache again on complete network failure
                 return caches.match(event.request);
             });
         })
@@ -89,17 +91,21 @@ self.addEventListener('fetch', event => {
 
 // Handle messages from clients
 self.addEventListener('message', event => {
-    if (event.data && event.data.type === 'SKIP_WAITING') {
+    if (!event.data) return;
+
+    if (event.data.type === 'SKIP_WAITING') {
         self.skipWaiting();
     }
     
-    if (event.data && event.data.type === 'GET_CACHE_INFO') {
+    if (event.data.type === 'GET_CACHE_INFO') {
         caches.open(CACHE_NAME).then(cache => {
             cache.keys().then(requests => {
-                event.ports[0].postMessage({
-                    type: 'CACHE_INFO',
-                    cacheSize: requests.length
-                });
+                if (event.ports && event.ports[0]) {
+                    event.ports[0].postMessage({
+                        type: 'CACHE_INFO',
+                        cacheSize: requests.length
+                    });
+                }
             });
         });
     }
@@ -110,7 +116,7 @@ self.addEventListener('sync', event => {
     if (event.tag === 'sync-game-save') {
         event.waitUntil(
             // Sync game save with server
-            new Promise((resolve, reject) => {
+            new Promise((resolve) => {
                 // TODO: Implement save sync
                 resolve();
             })
@@ -137,17 +143,20 @@ self.addEventListener('push', event => {
 self.addEventListener('notificationclick', event => {
     event.notification.close();
     
+    // Fix: Resolve absolute path destination to reliably check window contexts
+    const targetUrl = new URL('./', self.location.origin).href;
+    
     event.waitUntil(
-        clients.matchAll({ type: 'window' }).then(clientList => {
+        clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
             // Focus existing window if open
             for (let client of clientList) {
-                if (client.url === '/' && 'focus' in client) {
+                if (client.url === targetUrl && 'focus' in client) {
                     return client.focus();
                 }
             }
             // Open new window if not open
             if (clients.openWindow) {
-                return clients.openWindow('/');
+                return clients.openWindow('./');
             }
         })
     );
