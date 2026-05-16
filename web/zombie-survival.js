@@ -684,19 +684,94 @@ function initializeGame() {
         gameState.audio = new AudioSystem();
         gameState.leaderboard = new LeaderboardSystem();
         
-        setupEventListeners();
+        function setupEventListeners() {
+            // 1. Keyboard Inputs (Desktop Fallback)
+    document.addEventListener('keydown', (e) => {
+        const key = e.key.toLowerCase();
+        if (key === 'w' || key === 'arrowup') gameState.playerInput.y = -1;
+        if (key === 's' || key === 'arrowdown') gameState.playerInput.y = 1;
+        if (key === 'a' || key === 'arrowleft') gameState.playerInput.x = -1;
+        if (key === 'd' || key === 'arrowright') gameState.playerInput.x = 1;
         
+        if (key === 'escape') togglePauseMenu();
+        if (key === 'r') {
+            if (gameState.player) gameState.player.weapon.reload();
+        }
+        if (key === '1') switchWeapon('pistol');
+        if (key === '2') switchWeapon('rifle');
+        if (key === '3') switchWeapon('shotgun');
+        if (key === '4') switchWeapon('grenade');
+    });
+    
+    document.addEventListener('keyup', (e) => {
+        const key = e.key.toLowerCase();
+        if (key === 'w' || key === 'arrowup') gameState.playerInput.y = 0;
+        if (key === 's' || key === 'arrowdown') gameState.playerInput.y = 0;
+        if (key === 'a' || key === 'arrowleft') gameState.playerInput.x = 0;
+        if (key === 'd' || key === 'arrowright') gameState.playerInput.x = 0;
+    });
+    
+    // 2. Mouse Inputs (Desktop Fallback)
+    document.addEventListener('mousemove', (e) => {
         const canvas = document.getElementById('canvas');
-        if (!canvas) {
-            console.error('Canvas element not found');
-            return;
-        }
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left - canvas.width / 2;
+        const mouseY = e.clientY - rect.top - canvas.height / 2;
         
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-            console.error('Could not get 2D context');
-            return;
+        // Only map mouse coordinate angles if touch vectors aren't actively dominating
+        if (typeof touchControls === 'undefined' || !touchControls.firingActive) {
+            gameState.fireInput.x = mouseX;
+            gameState.fireInput.y = mouseY;
         }
+    });
+    
+    document.addEventListener('mousedown', () => {
+        if (typeof touchControls === 'undefined' || !touchControls.firingActive) {
+            gameState.fireInput.active = true;
+        }
+    });
+    
+    document.addEventListener('mouseup', () => {
+        if (typeof touchControls === 'undefined' || !touchControls.firingActive) {
+            gameState.fireInput.active = false;
+        }
+    });
+    
+    // 3. Mobile Touch UI Custom Event Listeners (The Missing Link!)
+    document.addEventListener('mobileAction', (e) => {
+        const action = e.detail.action;
+        if (!gameState.player) return;
+        
+        if (action === 'reload') {
+            gameState.player.weapon.reload();
+            gameState.audio.play('reload');
+        }
+        if (action === 'build') {
+            console.log("Mobile Build action triggered!");
+            gameState.audio.play('build');
+            // Your custom engineering barricade logic goes here
+        }
+        if (action === 'use-item') {
+            gameState.player.heal(30);
+            gameState.playerHunger = Math.min(100, gameState.playerHunger + 25);
+            gameState.playerThirst = Math.min(100, gameState.playerThirst + 25);
+            gameState.audio.play('powerup');
+        }
+    });
+    
+    // 4. Modal Interface Layout Buttons
+    const restartBtn = document.getElementById('restart-btn');
+    if (restartBtn) restartBtn.addEventListener('click', restartGame);
+    
+    const menuBtn = document.getElementById('menu-btn');
+    if (menuBtn) menuBtn.addEventListener('click', goToMenu);
+    
+    const resumeBtn = document.getElementById('resume-btn');
+    if (resumeBtn) resumeBtn.addEventListener('click', togglePauseMenu);
+    
+    const quitBtn = document.getElementById('quit-btn');
+    if (quitBtn) quitBtn.addEventListener('click', goToMenu);
+}
         
         resizeGameCanvas();
         window.addEventListener('resize', resizeGameCanvas);
