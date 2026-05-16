@@ -684,6 +684,7 @@ function initializeGame() {
         gameState.audio = new AudioSystem();
         gameState.leaderboard = new LeaderboardSystem();
         
+        // Setup all input and UI listeners safely
         setupEventListeners();
         
         resizeGameCanvas();
@@ -725,6 +726,11 @@ function selectClass(classType) {
     gameState.selectedClass = classType;
     console.log('Selected class:', classType);
     
+    // Unlock Web Audio Context via explicit user click gesture
+    if (gameState.audio && gameState.audio.audioContext && gameState.audio.audioContext.state === 'suspended') {
+        gameState.audio.audioContext.resume();
+    }
+    
     let health = 100;
     switch(classType) {
         case 'soldier':
@@ -751,10 +757,10 @@ function selectClass(classType) {
     spawnWave();
     
     const classScreen = document.getElementById('class-screen');
-    classScreen.style.display = 'none';
+    if (classScreen) classScreen.style.display = 'none';
     
     const uiOverlay = document.getElementById('ui-overlay');
-    uiOverlay.style.display = 'block';
+    if (uiOverlay) uiOverlay.style.display = 'block';
     
     startGameLoop();
 }
@@ -818,11 +824,11 @@ function setupEventListeners() {
     // 2. Mouse Inputs (Desktop Fallback)
     document.addEventListener('mousemove', (e) => {
         const canvas = document.getElementById('canvas');
+        if (!canvas) return;
         const rect = canvas.getBoundingClientRect();
         const mouseX = e.clientX - rect.left - canvas.width / 2;
         const mouseY = e.clientY - rect.top - canvas.height / 2;
         
-        // Only map mouse coordinate angles if touch vectors aren't actively dominating
         if (typeof touchControls === 'undefined' || !touchControls.firingActive) {
             gameState.fireInput.x = mouseX;
             gameState.fireInput.y = mouseY;
@@ -863,19 +869,20 @@ function setupEventListeners() {
     });
     
     // 4. Modal Interface Layout Buttons
-    const restartBtn = document.getElementById('restart-btn');
-    if (restartBtn) restartBtn.addEventListener('click', restartGame);
+    const interfaceButtons = [
+        { id: 'restart-btn', action: restartGame },
+        { id: 'menu-btn', action: goToMenu },
+        { id: 'resume-btn', action: togglePauseMenu },
+        { id: 'quit-btn', action: goToMenu }
+    ];
     
-    const menuBtn = document.getElementById('menu-btn');
-    if (menuBtn) menuBtn.addEventListener('click', goToMenu);
-    
-    const resumeBtn = document.getElementById('resume-btn');
-    if (resumeBtn) resumeBtn.addEventListener('click', togglePauseMenu);
-    
-    const quitBtn = document.getElementById('quit-btn');
-    if (quitBtn) quitBtn.addEventListener('click', goToMenu);
+    interfaceButtons.forEach(btn => {
+        const element = document.getElementById(btn.id);
+        if (element) {
+            element.addEventListener('click', btn.action);
+        }
+    });
 }
-
 function switchWeapon(weaponType) {
     if (gameState.player) {
         gameState.player.weapon.setType(weaponType);
