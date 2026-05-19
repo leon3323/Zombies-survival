@@ -3,7 +3,7 @@
  * Enables offline gameplay and caching
  */
 
-const CACHE_NAME = 'zombie-survival-v13';
+const CACHE_NAME = 'zombie-survival-v14';
 // Fix: Use relative paths to ensure compatibility with subfolder hosting (e.g., GitHub Pages)
 const ASSETS_TO_CACHE = [
     './',
