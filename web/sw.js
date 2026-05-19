@@ -23,7 +23,6 @@ self.addEventListener('install', event => {
             console.log('[Service Worker] Caching assets');
             return cache.addAll(ASSETS_TO_CACHE).catch(err => {
                 console.log('[Service Worker] Cache error, falling back to core files:', err);
-                // Fix: map to an array of promises and pass them through Promise.all to preserve execution chain
                 const coreAssets = ASSETS_TO_CACHE.slice(0, 3);
                 return Promise.all(
                     coreAssets.map(url => cache.add(url).catch(() => {}))
@@ -34,18 +33,18 @@ self.addEventListener('install', event => {
     self.skipWaiting();
 });
 
-// Activate event - clean old caches
+// Activate event - clean old caches cleanly
 self.addEventListener('activate', event => {
     console.log('[Service Worker] Activating...');
     event.waitUntil(
         caches.keys().then(cacheNames => {
             return Promise.all(
-                cacheNames.map(cacheName => {
-                    if (cacheName !== CACHE_NAME) {
+                cacheNames
+                    .filter(cacheName => cacheName !== CACHE_NAME)
+                    .map(cacheName => {
                         console.log('[Service Worker] Deleting old cache:', cacheName);
                         return caches.delete(cacheName);
-                    }
-                })
+                    })
             );
         })
     );
@@ -54,35 +53,30 @@ self.addEventListener('activate', event => {
 
 // Fetch event - serve from cache, fallback to network
 self.addEventListener('fetch', event => {
-    // Skip non-GET requests
-    if (event.request.method !== 'GET') {
-        return;
-    }
+    if (event.request.method !== 'GET') return;
     
     event.respondWith(
-        caches.match(event.request).then(response => {
-            // Return cached response if available
-            if (response) {
-                return response;
+        caches.match(event.request).then(cachedResponse => {
+            if (cachedResponse) {
+                return cachedResponse;
             }
             
-            // Otherwise fetch from network
             return fetch(event.request).then(networkResponse => {
-                // Don't cache non-2xx responses
                 if (!networkResponse || networkResponse.status !== 200 || networkResponse.type === 'error') {
                     return networkResponse;
                 }
                 
-                // Cache successful responses
                 const responseToCache = networkResponse.clone();
-                caches.open(CACHE_NAME).then(cache => {
-                    cache.put(event.request, responseToCache);
-                });
+                // Fix: wrapped in event.waitUntil to keep worker alive during cache write
+                event.waitUntil(
+                    caches.open(CACHE_NAME).then(cache => {
+                        return cache.put(event.request, responseToCache);
+                    }).catch(err => console.error('[Service Worker] Dynamic cache put failed:', err))
+                );
                 
                 return networkResponse;
             }).catch(err => {
                 console.log('[Service Worker] Fetch failed:', err);
-                // Try fallback to cache again on complete network failure
                 return caches.match(event.request);
             });
         })
@@ -115,7 +109,6 @@ self.addEventListener('message', event => {
 self.addEventListener('sync', event => {
     if (event.tag === 'sync-game-save') {
         event.waitUntil(
-            // Sync game save with server
             new Promise((resolve) => {
                 // TODO: Implement save sync
                 resolve();
@@ -143,18 +136,17 @@ self.addEventListener('push', event => {
 self.addEventListener('notificationclick', event => {
     event.notification.close();
     
-    // Fix: Resolve absolute path destination to reliably check window contexts
     const targetUrl = new URL('./', self.location.origin).href;
     
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
-            // Focus existing window if open
             for (let client of clientList) {
-                if (client.url === targetUrl && 'focus' in client) {
+                // Better matching logic covering trailing slash variants or index files
+                const clientUrl = new URL(client.url, self.location.origin).href;
+                if ((clientUrl === targetUrl || clientUrl.endsWith('/index.html')) && 'focus' in client) {
                     return client.focus();
                 }
             }
-            // Open new window if not open
             if (clients.openWindow) {
                 return clients.openWindow('./');
             }
